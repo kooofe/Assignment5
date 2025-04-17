@@ -1,54 +1,86 @@
 from flask import Flask, request, jsonify
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import jwt
+import datetime
 
 app = Flask(__name__)
-# Using a weak key intentionally for demonstration purposes
-SECRET_KEY = "weakkey"
 
-# Sample user database
+# Load RSA keys for RS256 signing/verification
+with open("private.pem", "rb") as f:
+    PRIVATE_KEY = f.read()
+with open("public.pem", "rb") as f:
+    PUBLIC_KEY = f.read()
+
+# In‑memory user store (replace with DB in production)
 users = {
-    "admin": "admin123",
-    "user": "password"
+    "admin": {"password": "admin123", "id": 1},
+    "user":  {"password": "password",  "id": 2},
 }
+# Map username → user_id
+user_ids = {u: info["id"] for u, info in users.items()}
 
+# ------------------------------------------------------------------------------
+# 1. Brute‑force Protection: Flask‑Limiter
+# ------------------------------------------------------------------------------
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],  # Global defaults
+    storage_uri="memory://"
+)
 
-# 1. Login Endpoint (Vulnerable to brute-force attacks and weak JWT protection)
-@app.route('/login', methods=['POST', 'GET'])
+@app.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")  # Restrict to 5 attempts per minute per IP
 def login():
-    data = request.get_json()
-    if not data:
-        return "Missing JSON data", 400
+    data = request.json or {}
+    username = data.get("username", "")
+    password = data.get("password", "")
 
-    username = data.get("username")
-    password = data.get("password")
+    user = users.get(username)
+    if not user or user["password"] != password:
+        return jsonify({"error": "Invalid credentials"}), 401
 
-    if username in users and users[username] == password:
-        # Create a JWT token with no expiration and using HS256
-        token = jwt.encode({"user": username}, SECRET_KEY, algorithm="HS256")
-        return jsonify({"token": token})
+    # Issue RS256‑signed JWT with 30‑minute expiration
+    payload = {
+        "user": username,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+    }
+    token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
+    return jsonify({"token": token}), 200
 
-    return "Unauthorized", 401
-
-# 2. Profile Endpoint (Vulnerable to token hijacking and alg: none attacks)
-@app.route('/profile')
+# ------------------------------------------------------------------------------
+# 2. Secure Profile (prevent token‑hijacking & alg:none)
+# ------------------------------------------------------------------------------
+@app.route("/profile", methods=["GET"])
 def profile():
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
     try:
-        # Insecurely allow "none" by adding it to the allowed algorithms. Do NOT use in production!
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256", "none"], options={"verify_signature": False})
-        user = payload.get("user")
-    except Exception as e:
-        return f"Token error: {e}", 401
-    return f"Welcome {user}"
+        # Only allow RS256 tokens—reject alg: none or any other
+        payload = jwt.decode(token, PUBLIC_KEY, algorithms=["RS256"])
+        username = payload["user"]
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
+        return jsonify({"error": f"Unauthorized: {str(e)}"}), 401
 
+    return jsonify({"message": f"Welcome {username}"}), 200
 
-# 3. Insecure Direct Object Reference (IDOR) Endpoint
-@app.route('/users/<int:user_id>', methods=['GET'])
+# ------------------------------------------------------------------------------
+# 3. IDOR Protection
+# ------------------------------------------------------------------------------
+@app.route("/users/<int:user_id>", methods=["GET"])
 def get_user(user_id):
-    # This endpoint does not perform any authorization checks.
-    # An attacker can modify user_id in the URL to access data not associated with their account.
-    return jsonify({"user_id": user_id, "role": "user"})
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, PUBLIC_KEY, algorithms=["RS256"])
+        username = payload["user"]
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return jsonify({"error": "Unauthorized"}), 401
 
+    # Enforce that token’s user_id matches requested user_id
+    if user_ids.get(username) != user_id:
+        return jsonify({"error": "Access denied"}), 403
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    return jsonify({"user_id": user_id, "role": "user"}), 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
