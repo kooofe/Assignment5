@@ -1,0 +1,189 @@
+name: CI + DAST
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # 1) Static analysis
+  sast:
+    name: SAST (Semgrep + Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: |
+          semgrep scan --config=p/ci --sarif --output=semgrep.sarif
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        if: always()
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: |
+          bandit -r . --format sarif --output bandit.sarif
+      - name: Upload Bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+        if: always()
+
+  # 2) Build & Deploy Flask
+  deploy:
+    name: Build & Deploy Flask
+    needs: sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Start Flask in background
+        run: |
+          nohup python app.py &       # assumes app.py runs on 0.0.0.0:5000
+          sleep 10                     # wait for the server to be ready
+
+  # 3) Dynamic analysis
+  dast:
+    name: DAST (OWASP ZAP)
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ZAP Baseline Scan action
+        uses: zaproxy/action-baseline@v0.11.0
+
+      - name: Run ZAP Baseline Scan
+        with:
+          # target the running Flask app
+          target: 'http://localhost:5000'
+          format: 'sarif'               # generate SARIF output
+          output: 'zap-baseline.sarif'
+
+      - name: Upload ZAP SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zap-baseline.sarif
+        if: always()name: CI + DAST
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # 1) Static analysis
+  sast:
+    name: SAST (Semgrep + Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: |
+          semgrep scan --config=p/ci --sarif --output=semgrep.sarif
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        if: always()
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: |
+          bandit -r . --format sarif --output bandit.sarif
+      - name: Upload Bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+        if: always()
+
+  # 2) Build & Deploy Flask
+  deploy:
+    name: Build & Deploy Flask
+    needs: sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Start Flask in background
+        run: |
+          nohup python app.py &       # assumes app.py runs on 0.0.0.0:5000
+          sleep 10                     # wait for the server to be ready
+
+  # 3) Dynamic analysis
+  dast:
+    name: DAST (OWASP ZAP)
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ZAP Baseline Scan action
+        uses: zaproxy/action-baseline@v0.11.0
+
+      - name: Run ZAP Baseline Scan
+        with:
+          # target the running Flask app
+          target: 'http://localhost:5000'
+          format: 'sarif'               # generate SARIF output
+          output: 'zap-baseline.sarif'
+
+      - name: Upload ZAP SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zap-baseline.sarif
+        if: always()
