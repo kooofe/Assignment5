@@ -1,31 +1,117 @@
-name: CI
+name: CI / SAST & DAST Pipeline
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "master", "main" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "master", "main" ]
+
+permissions:
+  contents: read  # for CodeQL
 
 jobs:
-  test:
+  # 1) Static Analysis (SAST)
+  sast:
+    name: 🔍 Static Analysis
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        # if your code/tests live in a subfolder, adjust this
-        working-directory: .
+
     steps:
-      - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.10
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: List project files
-        run: ls -R .
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python
+
+    - name: Run CodeQL analysis
+      uses: github/codeql-action/analyze@v2
+
+    - name: Run Bandit (Python SAST)
+      run: |
+        pip install bandit
+        bandit -r . -o bandit-report.txt -f txt
+
+    - name: Run Semgrep (general SAST)
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: p/ci  # you can pick a different ruleset
+
+    - name: Upload SAST reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: sast-reports
+        path: |
+          bandit-report.txt
+          semgrep-report.json
+
+  # 2) Build, Lint & Test
+  build:
+    name: 🛠 Build & Test
+    needs: sast
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install flake8 pytest
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run tests
+      run: pytest
+
+  # 3) Dynamic Analysis (DAST)
+  dast:
+    name: 🛡️ DAST (OWASP ZAP)
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python & start Flask app
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+    - run: |
+        pip install -r requirements.txt
+        # start Flask in background
+        nohup python app.py & 
+        # wait until it's up
+        timeout 60 bash -c 'until curl -s http://localhost:5000; do sleep 5; done'
+
+    - name: Run OWASP ZAP baseline scan
+      uses: zaproxy/action-baseline@v0.4.0
+      with:
+        target: "http://localhost:5000"
+        cmd_options: -r zap-report.html
+        fail_on_warn: false
+
+    - name: Upload ZAP report
+      uses: actions/upload-artifact@v3
+      with:
+        name: dast-report
+        path: zap-report.html
