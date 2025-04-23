@@ -85,24 +85,32 @@ jobs:
   🛡️ Dynamic Analysis (DAST):
     needs: 🛠 Build & Test
     runs-on: ubuntu-latest
-    services:
-      app:
-        image: python:3.10
-        ports: ["5000:5000"]
-        options: >-
-          --health-cmd="curl -f http://localhost:5000 || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-        command: bash -lc "pip install -r requirements.txt && python app.py"
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.10"
+
+      - name: Start Flask app
+        run: |
+          pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt
+          # Launch app in the background
+          nohup python app.py &>/dev/null &
+          # Wait up to 60s for it to be healthy
+          timeout 60 bash -c 'until curl -fs http://localhost:5000; do sleep 2; done'
+
       - name: Run OWASP ZAP baseline scan
         uses: zaproxy/action-baseline@v0.4.0
         with:
           target: "http://localhost:5000"
           cmd_options: -r zap-report.html
           fail_on_warn: false
+
       - name: Upload DAST report
         uses: actions/upload-artifact@v4
         with:
