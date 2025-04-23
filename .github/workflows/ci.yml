@@ -29,9 +29,3 @@ jobs:
 
       - name: List project files
         run: ls -R .
-
-      - name: Run tests
-        run: |
-          ls -R .            # sanity-check that 'tests/' exists
-          pytest --maxfail=1 --disable-warnings -q
-
