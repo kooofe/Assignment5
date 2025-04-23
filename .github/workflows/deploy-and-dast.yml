@@ -1,0 +1,39 @@
+name: Deploy & DAST
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy-and-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code
+      - name: Checkout repository
+        uses: actions/checkout@v3  # checks out your code into $GITHUB_WORKSPACE :contentReference[oaicite:0]{index=0}
+
+      # 2. Prepare Python
+      - name: Set up Python
+        uses: actions/setup-python@v5  # installs & adds Python to PATH :contentReference[oaicite:1]{index=1}
+        with:
+          python-version: '3.x'
+
+      # 3. Install dependencies
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      # 4. Deploy Flask in background
+      - name: Start Flask app
+        run: |
+          nohup flask --app app run --host 0.0.0.0 --port 5000 &
+          # give Flask time to spin up
+          sleep 10
+
+      # 5. Run OWASP ZAP Baseline DAST
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0  # latest stable :contentReference[oaicite:2]{index=2}
+        with:
+          target: 'http://localhost:5000'
+          token: ${{ secrets.GITHUB_TOKEN }}
