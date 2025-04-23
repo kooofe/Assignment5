@@ -1,4 +1,4 @@
-name: CI: Bandit → Deploy → DAST
+name: Bandit → Deploy → DAST
 
 on:
   push:
