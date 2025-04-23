@@ -1,48 +1,63 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
-# This workflow file requires a free account on Semgrep.dev to
-# manage rules, file ignores, notifications, and more.
-#
-# See https://semgrep.dev/docs
-
-name: Semgrep
+name: Semgrep CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "master" ]
-  schedule:
-    - cron: '15 11 * * 2'
-
-permissions:
-  contents: read
+    branches: ["master"]
 
 jobs:
-  semgrep:
+  semgrep-sast:
+    name: Static Scan & SARIF Upload
+    runs-on: ubuntu-latest
     permissions:
-      contents: read # for actions/checkout to fetch code
-      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
-      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
-    name: Scan
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Semgrep
+        run: python3 -m pip install --upgrade semgrep
+
+      - name: Run Semgrep scan
+        run: semgrep scan \
+              --config=p/ci \
+              --sarif --output=semgrep.sarif \
+              --metrics=off
+
+      - name: Upload SARIF for GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        if: always()
+  semgrep-ci:
+    name: Enforce Findings on PR
+    needs: semgrep-sast
     runs-on: ubuntu-latest
     steps:
-      # Checkout project source
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # Scan code using project's configuration on https://semgrep.dev/manage
-      - uses: returntocorp/semgrep-action@fcd5ab7459e8d91cb1777481980d1b18b4fc6735
-        with:
-          publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
-          publishDeployment: ${{ secrets.SEMGREP_DEPLOYMENT_ID }}
-          generateSarif: "1"
+      - name: Install Semgrep
+        run: python3 -m pip install --upgrade semgrep
 
-      # Upload SARIF file generated in previous step
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3.28.4
+      - name: Authenticate with Semgrep AppSec
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        run: |
+          semgrep login --token "$SEMGREP_APP_TOKEN"
+
+      - name: Run Semgrep CI
+        run: semgrep ci --sarif --output=semgrep.ci.sarif
+
+      - name: Upload CI SARIF
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: results.sarif
+          sarif_file: semgrep.ci.sarif
+        if: always()
