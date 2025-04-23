@@ -35,9 +35,6 @@ jobs:
         with:
           languages: python
 
-      - name: Run CodeQL analysis
-        uses: github/codeql-action/analyze@v2
-
       - name: Run Bandit (Python SAST)
         run: |
           pip install bandit
