@@ -23,7 +23,10 @@ jobs:
         uses: shundor/python-bandit-scan@ab1d87dfccc5a0ffab88be3aaac6ffe35c10d6cd  # :contentReference[oaicite:3]{index=3}
         with:
           exit_zero: true
-          config_file: bandit.yaml    # point to tuned config :contentReference[oaicite:4]{index=4}
+          excluded_paths: 'tests'
+          skips: 'B101'
+          level: 'high'
+          confidence: 'high'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-and-dast:
