@@ -1,0 +1,27 @@
+name: "CodeQL SAST Scan"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *'  # daily at 02:00 UTC
+
+jobs:
+  analyze:
+    name: Perform CodeQL Analysis
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: javascript   # or python, go, java, etc.
+    - name: Build project
+      run: |
+        npm install
+        npm run build       # adapt to your build
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
