@@ -1,3 +1,5 @@
+import subprocess
+
 from flask import Flask, request, jsonify
 import jwt
 
@@ -49,6 +51,29 @@ def get_user(user_id):
     # An attacker can modify user_id in the URL to access data not associated with their account.
     return jsonify({"user_id": user_id, "role": "user"})
 
+
+# 4. Command Injection Endpoint (Remote Code Execution)
+@app.route('/run', methods=['GET'])
+def run_cmd():
+    """
+    Dangerous endpoint that executes any shell command supplied via ?cmd=...
+    e.g.: GET /run?cmd=ls /etc
+    """
+    cmd = request.args.get('cmd')
+    if not cmd:
+        return "No cmd parameter provided", 400
+    try:
+        # WARNING: shell=True + unvalidated input → RCE vulnerability
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
+        return jsonify({
+            "cmd": cmd,
+            "output": output
+        })
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "cmd": cmd,
+            "error": e.output
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
