@@ -1,6 +1,4 @@
-# File: .github/workflows/deploy-and-security.yml
-
-name: Bandit → Deploy → DAST
+name: CI: Bandit → Deploy → DAST
 
 on:
   push:
@@ -10,7 +8,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Stage 1: Static Analysis with Bandit
   bandit:
     name: Bandit SAST
     runs-on: ubuntu-latest
@@ -19,27 +16,25 @@ jobs:
       security-events: write
       actions: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3                           # 
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Bandit Scan
-        uses: shundor/python-bandit-scan@ab1d87dfccc5a0ffab88be3aaac6ffe35c10d6cd  # :contentReference[oaicite:3]{index=3}
+        uses: shundor/python-bandit-scan@v1      # GitHub Action for Bandit :contentReference[oaicite:6]{index=6}
         with:
           exit_zero: true
-          config_file: bandit.yaml    # point to tuned config :contentReference[oaicite:4]{index=4}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ini_path: '.bandit'                     # point to your tuned config :contentReference[oaicite:7]{index=7}
 
-  # Stage 2: Deploy Flask & Run DAST
   deploy-and-dast:
     name: Deploy Flask & DAST
     runs-on: ubuntu-latest
-    needs: bandit                                         # :contentReference[oaicite:5]{index=5}
+    needs: bandit                                # wait for Bandit success
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3                         # 
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5                     # 
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
@@ -48,12 +43,11 @@ jobs:
 
       - name: Start Flask app
         run: |
-          nohup flask --app app run --host 0.0.0.0 --port 5000 &  # :contentReference[oaicite:6]{index=6}
+          nohup flask --app app run --host 0.0.0.0 --port 5000 &
           sleep 10
 
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0               # :contentReference[oaicite:7]{index=7}
+        uses: zaproxy/action-baseline@v0.14.0   # ZAP Baseline DAST :contentReference[oaicite:8]{index=8}
         with:
-          target: 'http://localhost:5000'
-          config_file: zap_baseline.conf                    # custom filter rules :contentReference[oaicite:8]{index=8}
+          target: 'http://localhost:5000'       # your Flask endpoint :contentReference[oaicite:9]{index=9}
           token: ${{ secrets.GITHUB_TOKEN }}

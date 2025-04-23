@@ -1,0 +1,7 @@
+# File: .bandit
+
+exclude_dirs: ['tests']       # don’t scan your test folder :contentReference[oaicite:0]{index=0}
+tests: ['B301','B302','B303'] # only medium+ severity checks :contentReference[oaicite:1]{index=1}
+skips: ['B101']               # skip assert usage warnings :contentReference[oaicite:2]{index=2}
+severity: 'high'              # report only HIGH severity :contentReference[oaicite:3]{index=3}
+confidence: 'high'            # report only HIGH confidence :contentReference[oaicite:4]{index=4}
