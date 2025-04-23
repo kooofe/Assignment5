@@ -1,39 +1,47 @@
-name: Deploy & DAST
+name: Bandit → Deploy → DAST
 
 on:
   push:
     branches: [ 'master', 'main' ]
   workflow_dispatch:
 
+
 jobs:
-  deploy-and-scan:
+  # Stage 1: Static Analysis with Bandit
+  bandit:
+    name: Bandit SAST
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read          # for checkout
+      security-events: write  # to upload SARIF/results
+      actions: read           # needed by some actions
     steps:
-      # 1. Get the code
-      - name: Checkout repository
-        uses: actions/checkout@v3  # checks out your code into $GITHUB_WORKSPACE :contentReference[oaicite:0]{index=0}
+      - uses: actions/checkout@v3                # Checkout your code :contentReference[oaicite:3]{index=3}
+      - name: Bandit Scan
+        uses: shundor/python-bandit-scan@ab1d87dfccc5a0ffab88be3aaac6ffe35c10d6cd  # Python Bandit SAST Action :contentReference[oaicite:4]{index=4}
+        with:
+          exit_zero: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. Prepare Python
+  # Stage 2: Deploy Flask & Run DAST
+  deploy-and-dast:
+    name: Deploy Flask & DAST
+    runs-on: ubuntu-latest
+    needs: bandit                             # Ensures Bandit completes first :contentReference[oaicite:5]{index=5}
+    steps:
+      - uses: actions/checkout@v3              # Fresh checkout for this job :contentReference[oaicite:6]{index=6}
       - name: Set up Python
-        uses: actions/setup-python@v5  # installs & adds Python to PATH :contentReference[oaicite:1]{index=1}
+        uses: actions/setup-python@v5          # Configure Python environment :contentReference[oaicite:7]{index=7}
         with:
           python-version: '3.x'
-
-      # 3. Install dependencies
-      - name: Install requirements
-        run: pip install -r requirements.txt
-
-      # 4. Deploy Flask in background
+      - name: Install dependencies
+        run: pip install -r requirements.txt   # Install your Flask deps
       - name: Start Flask app
         run: |
-          nohup flask --app app run --host 0.0.0.0 --port 5000 &
-          # give Flask time to spin up
-          sleep 10
-
-      # 5. Run OWASP ZAP Baseline DAST
+          nohup flask --app app run --host 0.0.0.0 --port 5000 &  # Run Flask in background
+          sleep 10                                              # Wait for server readiness
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0  # latest stable :contentReference[oaicite:2]{index=2}
+        uses: zaproxy/action-baseline@v0.14.0  # Baseline DAST scan :contentReference[oaicite:8]{index=8}
         with:
           target: 'http://localhost:5000'
           token: ${{ secrets.GITHUB_TOKEN }}
