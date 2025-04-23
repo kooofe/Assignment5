@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   test:
@@ -12,7 +12,7 @@ jobs:
     defaults:
       run:
         # if your code/tests live in a subfolder, adjust this
-        working-directory: .  
+        working-directory: .
     steps:
       - uses: actions/checkout@v3
 
@@ -31,4 +31,7 @@ jobs:
         run: ls -R .
 
       - name: Run tests
-        run: pytest --maxfail=1 --disable-warnings -q
+        run: |
+          ls -R .            # sanity-check that 'tests/' exists
+          pytest --maxfail=1 --disable-warnings -q
+
