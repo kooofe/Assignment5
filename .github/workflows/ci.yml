@@ -12,7 +12,7 @@ permissions:
   security-events: write
 
 jobs:
-  🔍 Static Analysis (SAST):
+  Static Analysis (SAST):
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -62,7 +62,7 @@ jobs:
             bandit-report.json
             semgrep-report.json
 
-  🛠 Build & Test:
+  Build & Test:
     needs: 🔍 Static Analysis (SAST)
     runs-on: ubuntu-latest
     steps:
@@ -82,7 +82,7 @@ jobs:
       - name: Run pytest
         run: pytest
 
-  🛡️ Dynamic Analysis (DAST):
+  Dynamic Analysis (DAST):
     needs: 🛠 Build & Test
     runs-on: ubuntu-latest
 
