@@ -1,15 +1,15 @@
 # File: bandit.yaml
 
 excluded_paths:
-  - 'tests'                # don’t scan tests :contentReference[oaicite:9]{index=9}
+  - 'tests'                # don’t scan tests
 
 skips:
-  - 'B101'                 # skip assert usage warnings :contentReference[oaicite:10]{index=10}
+  - 'B101'                 # skip assert usage warnings
 
 tests:
-  - 'B301'                 # only medium+ severity checks :contentReference[oaicite:11]{index=11}
+  - 'B301'                 # only medium+ severity checks
   - 'B302'
   - 'B303'
 
-level: 'high'           # report only HIGH severity :contentReference[oaicite:12]{index=12}
-confidence: 'high'         # report only HIGH confidence :contentReference[oaicite:13]{index=13}
+level: 'high'           # report only HIGH severity
+confidence: 'high'         # report only HIGH confidence
